@@ -5,6 +5,8 @@ import com.jarvis.core.Command;
 import java.io.*;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.*;
+import java.util.Collections;
+import java.util.List;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -18,6 +20,58 @@ public class DraftCommand implements Command {
             Files.createDirectories(draftsDir);
         } catch (IOException e) {
             // Directory creation failed; operations will report errors individually
+        }
+    }
+
+    public Path getDraftsDir() {
+        return draftsDir;
+    }
+
+    public boolean saveDraftFile(String name, String content) {
+        name = sanitizeName(name);
+        Path file = draftsDir.resolve(name + ".txt");
+        try {
+            Files.createDirectories(draftsDir);
+            Files.write(file, content.getBytes(StandardCharsets.UTF_8),
+                    StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
+            return true;
+        } catch (IOException e) {
+            return false;
+        }
+    }
+
+    public List<String> listDraftNames() {
+        try (Stream<Path> files = Files.list(draftsDir)) {
+            return files
+                    .filter(p -> p.toString().endsWith(".txt"))
+                    .map(p -> {
+                        String fname = p.getFileName().toString();
+                        return fname.substring(0, fname.length() - 4);
+                    })
+                    .sorted()
+                    .collect(Collectors.toList());
+        } catch (IOException e) {
+            return Collections.emptyList();
+        }
+    }
+
+    public String readDraftContent(String name) {
+        name = sanitizeName(name);
+        Path file = draftsDir.resolve(name + ".txt");
+        try {
+            return new String(Files.readAllBytes(file), StandardCharsets.UTF_8);
+        } catch (IOException e) {
+            return null;
+        }
+    }
+
+    public boolean deleteDraftFile(String name) {
+        name = sanitizeName(name);
+        Path file = draftsDir.resolve(name + ".txt");
+        try {
+            return Files.deleteIfExists(file);
+        } catch (IOException e) {
+            return false;
         }
     }
 
@@ -41,7 +95,7 @@ public class DraftCommand implements Command {
         String cleaned = input.replaceFirst("(?i)drafts?\\s*", "").trim();
 
         if (cleaned.isEmpty() || cleaned.equalsIgnoreCase("list")) {
-            return listDrafts();
+            return formatDraftList();
         }
 
         String[] parts = cleaned.split("\\s+", 3);
@@ -57,9 +111,8 @@ public class DraftCommand implements Command {
             case "remove":
                 return handleDelete(parts);
             case "list":
-                return listDrafts();
+                return formatDraftList();
             default:
-                // Treat as "draft save <name> <content>" shorthand: "draft <name> <content>"
                 String name = parts[0];
                 String content = cleaned.substring(name.length()).trim();
                 if (content.isEmpty()) {
@@ -69,7 +122,9 @@ public class DraftCommand implements Command {
                          + "  draft show <name>            — Show a draft\n"
                          + "  draft delete <name>          — Delete a draft";
                 }
-                return saveDraft(name, content);
+                return saveDraftFile(name, content)
+                        ? "Draft \"" + sanitizeName(name) + "\" saved, sir."
+                        : "Error saving draft.";
         }
     }
 
@@ -77,81 +132,42 @@ public class DraftCommand implements Command {
         if (parts.length < 3) {
             return "Usage: draft save <name> <content>\nExample: draft save meeting-notes Discuss Q3 roadmap";
         }
-        String name = parts[1];
-        String content = parts[2];
-        return saveDraft(name, content);
+        return saveDraftFile(parts[1], parts[2])
+                ? "Draft \"" + sanitizeName(parts[1]) + "\" saved, sir."
+                : "Error saving draft.";
     }
 
     private String handleShow(String[] parts) {
         if (parts.length < 2) {
             return "Usage: draft show <name>";
         }
-        String name = sanitizeName(parts[1]);
-        Path file = draftsDir.resolve(name + ".txt");
-        if (!Files.exists(file)) {
-            return "No draft found with name \"" + name + "\". Use 'draft list' to see saved drafts.";
+        String content = readDraftContent(parts[1]);
+        if (content == null) {
+            return "No draft found with name \"" + sanitizeName(parts[1]) + "\". Use 'draft list' to see saved drafts.";
         }
-        try {
-            String content = new String(Files.readAllBytes(file), StandardCharsets.UTF_8);
-            return "Draft \"" + name + "\":\n\n" + content;
-        } catch (IOException e) {
-            return "Error reading draft: " + e.getMessage();
-        }
+        return "Draft \"" + sanitizeName(parts[1]) + "\":\n\n" + content;
     }
 
     private String handleDelete(String[] parts) {
         if (parts.length < 2) {
             return "Usage: draft delete <name>";
         }
-        String name = sanitizeName(parts[1]);
-        Path file = draftsDir.resolve(name + ".txt");
-        if (!Files.exists(file)) {
-            return "No draft found with name \"" + name + "\".";
-        }
-        try {
-            Files.delete(file);
-            return "Draft \"" + name + "\" deleted, sir.";
-        } catch (IOException e) {
-            return "Error deleting draft: " + e.getMessage();
-        }
+        return deleteDraftFile(parts[1])
+                ? "Draft \"" + sanitizeName(parts[1]) + "\" deleted, sir."
+                : "No draft found with name \"" + sanitizeName(parts[1]) + "\".";
     }
 
-    private String saveDraft(String name, String content) {
-        name = sanitizeName(name);
-        Path file = draftsDir.resolve(name + ".txt");
-        try {
-            Files.write(file, content.getBytes(StandardCharsets.UTF_8),
-                    StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
-            return "Draft \"" + name + "\" saved, sir.";
-        } catch (IOException e) {
-            return "Error saving draft: " + e.getMessage();
+    private String formatDraftList() {
+        List<String> names = listDraftNames();
+        if (names.isEmpty()) {
+            return "No drafts saved yet, sir. Use 'draft save <name> <content>' to create one.";
         }
-    }
-
-    private String listDrafts() {
-        try (Stream<Path> files = Files.list(draftsDir)) {
-            java.util.List<String> names = files
-                    .filter(p -> p.toString().endsWith(".txt"))
-                    .map(p -> {
-                        String fname = p.getFileName().toString();
-                        return fname.substring(0, fname.length() - 4);
-                    })
-                    .sorted()
-                    .collect(Collectors.toList());
-
-            if (names.isEmpty()) {
-                return "No drafts saved yet, sir. Use 'draft save <name> <content>' to create one.";
-            }
-
-            StringBuilder sb = new StringBuilder("Saved drafts:\n");
-            for (String name : names) {
-                sb.append("  - ").append(name).append("\n");
-            }
-            sb.append("\nUse 'draft show <name>' to view a draft.");
-            return sb.toString();
-        } catch (IOException e) {
-            return "Error listing drafts: " + e.getMessage();
+        StringBuilder sb = new StringBuilder("Saved drafts:\n");
+        for (String name : names) {
+            sb.append("  - ").append(name).append("\n");
         }
+        sb.append("\nUse 'draft show <name>' to view a draft.");
+        return sb.toString();
     }
 
     private String sanitizeName(String name) {

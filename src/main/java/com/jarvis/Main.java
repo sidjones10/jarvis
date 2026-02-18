@@ -19,7 +19,8 @@ public class Main {
         engine.registerCommand(new WeatherCommand());
         engine.registerCommand(new QuoteCommand());
         engine.registerCommand(new SearchCommand());
-        engine.registerCommand(new DraftCommand());
+        DraftCommand draftCommand = new DraftCommand();
+        engine.registerCommand(draftCommand);
 
         ReminderCommand reminderCommand = new ReminderCommand();
         engine.registerCommand(reminderCommand);
@@ -32,6 +33,7 @@ public class Main {
 
             JarvisUI ui = new JarvisUI(engine);
             reminderCommand.setResponseListener(ui);
+            ui.setDraftCommand(draftCommand);
             ui.setVisible(true);
         });
     }

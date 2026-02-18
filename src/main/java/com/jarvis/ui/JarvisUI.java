@@ -1,5 +1,6 @@
 package com.jarvis.ui;
 
+import com.jarvis.commands.DraftCommand;
 import com.jarvis.core.JarvisEngine;
 import com.jarvis.core.ResponseListener;
 
@@ -19,15 +20,21 @@ public class JarvisUI extends JFrame implements ResponseListener {
     private static final Color BG_DARK = new Color(18, 18, 24);
     private static final Color BG_PANEL = new Color(25, 25, 35);
     private static final Color BG_INPUT = new Color(35, 35, 50);
+    private static final Color BG_CARD = new Color(30, 30, 42);
     private static final Color ACCENT_BLUE = new Color(0, 170, 255);
     private static final Color ACCENT_CYAN = new Color(0, 230, 230);
+    private static final Color ACCENT_GREEN = new Color(0, 200, 120);
     private static final Color TEXT_PRIMARY = new Color(220, 225, 235);
     private static final Color TEXT_SECONDARY = new Color(130, 140, 160);
     private static final Color USER_COLOR = new Color(100, 180, 255);
     private static final Color JARVIS_COLOR = new Color(0, 230, 200);
     private static final Color BORDER_COLOR = new Color(45, 50, 70);
 
+    private static final String CHAT_VIEW = "chat";
+    private static final String DISCOVER_VIEW = "discover";
+
     private final JarvisEngine engine;
+    private DraftCommand draftCommand;
     private JTextPane chatPane;
     private JTextField inputField;
     private StyledDocument doc;
@@ -37,10 +44,19 @@ public class JarvisUI extends JFrame implements ResponseListener {
     private float pulsePhase = 0f;
     private Timer pulseTimer;
 
+    private CardLayout cardLayout;
+    private JPanel centerPanel;
+    private JPanel discoverPanel;
+    private JPanel inputArea;
+
     public JarvisUI(JarvisEngine engine) {
         this.engine = engine;
         initUI();
         startPulseAnimation();
+    }
+
+    public void setDraftCommand(DraftCommand draftCommand) {
+        this.draftCommand = draftCommand;
     }
 
     private void initUI() {
@@ -53,8 +69,17 @@ public class JarvisUI extends JFrame implements ResponseListener {
         setLayout(new BorderLayout(0, 0));
 
         add(createHeader(), BorderLayout.NORTH);
-        add(createChatArea(), BorderLayout.CENTER);
-        add(createInputArea(), BorderLayout.SOUTH);
+
+        cardLayout = new CardLayout();
+        centerPanel = new JPanel(cardLayout);
+        centerPanel.setBackground(BG_DARK);
+        centerPanel.add(createChatArea(), CHAT_VIEW);
+        discoverPanel = createDiscoverPanel();
+        centerPanel.add(discoverPanel, DISCOVER_VIEW);
+        add(centerPanel, BorderLayout.CENTER);
+
+        inputArea = createInputArea();
+        add(inputArea, BorderLayout.SOUTH);
 
         appendJarvisMessage("J.A.R.V.I.S. online.\nGood " + getTimeOfDay() + ", sir. How may I assist you?\n\nType 'help' to see available commands.");
     }
@@ -67,7 +92,6 @@ public class JarvisUI extends JFrame implements ResponseListener {
             new EmptyBorder(12, 20, 12, 20)
         ));
 
-        // Arc reactor indicator
         arcReactorPanel = new JPanel() {
             @Override
             protected void paintComponent(Graphics g) {
@@ -87,15 +111,12 @@ public class JarvisUI extends JFrame implements ResponseListener {
                     (int) (80 + 120 * glow)
                 );
 
-                // Outer glow
                 g2.setColor(new Color(glowColor.getRed(), glowColor.getGreen(), glowColor.getBlue(), 40));
                 g2.fillOval(x - 3, y - 3, size + 6, size + 6);
 
-                // Main circle
                 g2.setColor(glowColor);
                 g2.fillOval(x, y, size, size);
 
-                // Inner bright center
                 g2.setColor(new Color(200, 255, 255, (int) (150 + 105 * glow)));
                 g2.fillOval(x + size / 4, y + size / 4, size / 2, size / 2);
 
@@ -141,32 +162,140 @@ public class JarvisUI extends JFrame implements ResponseListener {
         scrollPane.setVerticalScrollBarPolicy(JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED);
         scrollPane.setHorizontalScrollBarPolicy(JScrollPane.HORIZONTAL_SCROLLBAR_NEVER);
 
-        // Style the scrollbar
-        scrollPane.getVerticalScrollBar().setUI(new javax.swing.plaf.basic.BasicScrollBarUI() {
-            @Override
-            protected void configureScrollBarColors() {
-                this.thumbColor = BORDER_COLOR;
-                this.trackColor = BG_DARK;
-            }
-
-            @Override
-            protected JButton createDecreaseButton(int orientation) {
-                return createZeroButton();
-            }
-
-            @Override
-            protected JButton createIncreaseButton(int orientation) {
-                return createZeroButton();
-            }
-
-            private JButton createZeroButton() {
-                JButton button = new JButton();
-                button.setPreferredSize(new Dimension(0, 0));
-                return button;
-            }
-        });
+        styleScrollBar(scrollPane);
 
         return scrollPane;
+    }
+
+    private JPanel createDiscoverPanel() {
+        JPanel wrapper = new JPanel(new BorderLayout());
+        wrapper.setBackground(BG_DARK);
+
+        // Top bar with back button and title
+        JPanel topBar = new JPanel(new BorderLayout());
+        topBar.setBackground(BG_PANEL);
+        topBar.setBorder(BorderFactory.createCompoundBorder(
+            BorderFactory.createMatteBorder(0, 0, 1, 0, BORDER_COLOR),
+            new EmptyBorder(10, 20, 10, 20)
+        ));
+
+        JButton backButton = createStyledButton("BACK", ACCENT_BLUE, 70);
+        backButton.addActionListener(e -> showChatView());
+
+        JLabel discoverTitle = new JLabel("Discover — Saved Drafts");
+        discoverTitle.setFont(new Font("Monospaced", Font.BOLD, 16));
+        discoverTitle.setForeground(ACCENT_CYAN);
+
+        topBar.add(backButton, BorderLayout.WEST);
+        topBar.add(discoverTitle, BorderLayout.CENTER);
+
+        wrapper.add(topBar, BorderLayout.NORTH);
+
+        // Scrollable draft cards area — placeholder; rebuilt each time we show it
+        JPanel cardsPlaceholder = new JPanel();
+        cardsPlaceholder.setBackground(BG_DARK);
+        JScrollPane scroll = new JScrollPane(cardsPlaceholder);
+        scroll.setBorder(BorderFactory.createEmptyBorder());
+        scroll.getViewport().setBackground(BG_DARK);
+        styleScrollBar(scroll);
+        wrapper.add(scroll, BorderLayout.CENTER);
+
+        return wrapper;
+    }
+
+    private void refreshDiscoverPanel() {
+        // Rebuild the cards area inside the discover panel
+        BorderLayout layout = (BorderLayout) discoverPanel.getLayout();
+        Component centerComp = layout.getLayoutComponent(BorderLayout.CENTER);
+        if (centerComp != null) {
+            discoverPanel.remove(centerComp);
+        }
+
+        JPanel cardsContainer = new JPanel();
+        cardsContainer.setLayout(new BoxLayout(cardsContainer, BoxLayout.Y_AXIS));
+        cardsContainer.setBackground(BG_DARK);
+        cardsContainer.setBorder(new EmptyBorder(20, 20, 20, 20));
+
+        if (draftCommand == null) {
+            JLabel err = new JLabel("Draft system not available.");
+            err.setForeground(TEXT_SECONDARY);
+            err.setFont(new Font("Monospaced", Font.PLAIN, 14));
+            err.setAlignmentX(Component.LEFT_ALIGNMENT);
+            cardsContainer.add(err);
+        } else {
+            List<String> names = draftCommand.listDraftNames();
+            if (names.isEmpty()) {
+                JLabel empty = new JLabel("No drafts saved yet. Type something and click SAVE DRAFT.");
+                empty.setForeground(TEXT_SECONDARY);
+                empty.setFont(new Font("Monospaced", Font.PLAIN, 14));
+                empty.setAlignmentX(Component.LEFT_ALIGNMENT);
+                cardsContainer.add(empty);
+            } else {
+                for (String name : names) {
+                    cardsContainer.add(createDraftCard(name));
+                    cardsContainer.add(Box.createRigidArea(new Dimension(0, 10)));
+                }
+            }
+        }
+
+        JScrollPane scroll = new JScrollPane(cardsContainer);
+        scroll.setBorder(BorderFactory.createEmptyBorder());
+        scroll.getViewport().setBackground(BG_DARK);
+        scroll.setVerticalScrollBarPolicy(JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED);
+        scroll.setHorizontalScrollBarPolicy(JScrollPane.HORIZONTAL_SCROLLBAR_NEVER);
+        styleScrollBar(scroll);
+
+        discoverPanel.add(scroll, BorderLayout.CENTER);
+        discoverPanel.revalidate();
+        discoverPanel.repaint();
+    }
+
+    private JPanel createDraftCard(String name) {
+        String content = draftCommand.readDraftContent(name);
+        String preview = content != null
+                ? (content.length() > 120 ? content.substring(0, 120) + "..." : content)
+                : "(unable to read)";
+
+        JPanel card = new JPanel(new BorderLayout(10, 6));
+        card.setBackground(BG_CARD);
+        card.setBorder(BorderFactory.createCompoundBorder(
+            BorderFactory.createLineBorder(BORDER_COLOR, 1),
+            new EmptyBorder(14, 18, 14, 18)
+        ));
+        card.setMaximumSize(new Dimension(Integer.MAX_VALUE, 100));
+        card.setAlignmentX(Component.LEFT_ALIGNMENT);
+
+        JLabel nameLabel = new JLabel(name);
+        nameLabel.setFont(new Font("Monospaced", Font.BOLD, 14));
+        nameLabel.setForeground(ACCENT_CYAN);
+
+        JLabel previewLabel = new JLabel("<html><body style='width:500px'>" + escapeHtml(preview) + "</body></html>");
+        previewLabel.setFont(new Font("SansSerif", Font.PLAIN, 12));
+        previewLabel.setForeground(TEXT_SECONDARY);
+
+        JPanel buttons = new JPanel(new FlowLayout(FlowLayout.RIGHT, 6, 0));
+        buttons.setOpaque(false);
+
+        JButton viewBtn = createStyledButton("VIEW", ACCENT_BLUE, 60);
+        viewBtn.addActionListener(e -> {
+            showChatView();
+            appendJarvisMessage("Draft \"" + name + "\":\n\n" + (content != null ? content : "(empty)"));
+        });
+
+        JButton deleteBtn = createStyledButton("DELETE", new Color(200, 60, 60), 70);
+        deleteBtn.addActionListener(e -> {
+            draftCommand.deleteDraftFile(name);
+            refreshDiscoverPanel();
+        });
+
+        buttons.add(viewBtn);
+        buttons.add(deleteBtn);
+
+        card.add(nameLabel, BorderLayout.NORTH);
+        card.add(previewLabel, BorderLayout.CENTER);
+        card.add(buttons, BorderLayout.EAST);
+
+        return card;
     }
 
     private JPanel createInputArea() {
@@ -204,44 +333,70 @@ public class JarvisUI extends JFrame implements ResponseListener {
             }
         });
 
-        JButton sendButton = new JButton("SEND") {
-            @Override
-            protected void paintComponent(Graphics g) {
-                Graphics2D g2 = (Graphics2D) g.create();
-                g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-                if (getModel().isPressed()) {
-                    g2.setColor(ACCENT_BLUE.darker());
-                } else if (getModel().isRollover()) {
-                    g2.setColor(ACCENT_BLUE.brighter());
-                } else {
-                    g2.setColor(ACCENT_BLUE);
-                }
-                g2.fill(new RoundRectangle2D.Float(0, 0, getWidth(), getHeight(), 8, 8));
-                g2.setColor(Color.WHITE);
-                g2.setFont(getFont());
-                FontMetrics fm = g2.getFontMetrics();
-                int x = (getWidth() - fm.stringWidth(getText())) / 2;
-                int y = (getHeight() + fm.getAscent() - fm.getDescent()) / 2;
-                g2.drawString(getText(), x, y);
-                g2.dispose();
-            }
-        };
-        sendButton.setFont(new Font("SansSerif", Font.BOLD, 12));
-        sendButton.setPreferredSize(new Dimension(80, 36));
-        sendButton.setFocusPainted(false);
-        sendButton.setBorderPainted(false);
-        sendButton.setContentAreaFilled(false);
-        sendButton.setCursor(new Cursor(Cursor.HAND_CURSOR));
+        JButton sendButton = createStyledButton("SEND", ACCENT_BLUE, 80);
         sendButton.addActionListener(e -> handleInput());
+
+        JButton saveDraftButton = createStyledButton("SAVE DRAFT", ACCENT_GREEN, 110);
+        saveDraftButton.addActionListener(e -> handleSaveDraft());
+
+        JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 6, 0));
+        buttonPanel.setOpaque(false);
+        buttonPanel.add(saveDraftButton);
+        buttonPanel.add(sendButton);
 
         inputPanel.add(promptLabel, BorderLayout.WEST);
         inputPanel.add(inputField, BorderLayout.CENTER);
-        inputPanel.add(sendButton, BorderLayout.EAST);
+        inputPanel.add(buttonPanel, BorderLayout.EAST);
 
         return inputPanel;
     }
 
+    private void handleSaveDraft() {
+        String text = inputField.getText().trim();
+        if (text.isEmpty()) {
+            appendJarvisMessage("Nothing to save, sir. Please type something first.");
+            return;
+        }
+
+        if (draftCommand == null) {
+            appendJarvisMessage("Draft system is not available.");
+            return;
+        }
+
+        String name = JOptionPane.showInputDialog(
+                this,
+                "Enter a name for this draft:",
+                "Save Draft",
+                JOptionPane.PLAIN_MESSAGE
+        );
+
+        if (name == null || name.trim().isEmpty()) {
+            return; // User cancelled
+        }
+
+        boolean saved = draftCommand.saveDraftFile(name.trim(), text);
+        if (saved) {
+            inputField.setText("");
+            showDiscoverView();
+        } else {
+            appendJarvisMessage("Error saving draft. Please try again.");
+        }
+    }
+
+    private void showDiscoverView() {
+        refreshDiscoverPanel();
+        cardLayout.show(centerPanel, DISCOVER_VIEW);
+    }
+
+    private void showChatView() {
+        cardLayout.show(centerPanel, CHAT_VIEW);
+        inputField.requestFocusInWindow();
+    }
+
     private void handleInput() {
+        // Make sure we're on chat view when sending commands
+        showChatView();
+
         String text = inputField.getText().trim();
         if (text.isEmpty()) return;
 
@@ -324,6 +479,68 @@ public class JarvisUI extends JFrame implements ResponseListener {
         if (hour < 12) return "morning";
         if (hour < 17) return "afternoon";
         return "evening";
+    }
+
+    private JButton createStyledButton(String label, Color color, int width) {
+        JButton button = new JButton(label) {
+            @Override
+            protected void paintComponent(Graphics g) {
+                Graphics2D g2 = (Graphics2D) g.create();
+                g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+                if (getModel().isPressed()) {
+                    g2.setColor(color.darker());
+                } else if (getModel().isRollover()) {
+                    g2.setColor(color.brighter());
+                } else {
+                    g2.setColor(color);
+                }
+                g2.fill(new RoundRectangle2D.Float(0, 0, getWidth(), getHeight(), 8, 8));
+                g2.setColor(Color.WHITE);
+                g2.setFont(getFont());
+                FontMetrics fm = g2.getFontMetrics();
+                int x = (getWidth() - fm.stringWidth(getText())) / 2;
+                int y = (getHeight() + fm.getAscent() - fm.getDescent()) / 2;
+                g2.drawString(getText(), x, y);
+                g2.dispose();
+            }
+        };
+        button.setFont(new Font("SansSerif", Font.BOLD, 12));
+        button.setPreferredSize(new Dimension(width, 36));
+        button.setFocusPainted(false);
+        button.setBorderPainted(false);
+        button.setContentAreaFilled(false);
+        button.setCursor(new Cursor(Cursor.HAND_CURSOR));
+        return button;
+    }
+
+    private void styleScrollBar(JScrollPane scrollPane) {
+        scrollPane.getVerticalScrollBar().setUI(new javax.swing.plaf.basic.BasicScrollBarUI() {
+            @Override
+            protected void configureScrollBarColors() {
+                this.thumbColor = BORDER_COLOR;
+                this.trackColor = BG_DARK;
+            }
+
+            @Override
+            protected JButton createDecreaseButton(int orientation) {
+                return createZeroButton();
+            }
+
+            @Override
+            protected JButton createIncreaseButton(int orientation) {
+                return createZeroButton();
+            }
+
+            private JButton createZeroButton() {
+                JButton button = new JButton();
+                button.setPreferredSize(new Dimension(0, 0));
+                return button;
+            }
+        });
+    }
+
+    private static String escapeHtml(String text) {
+        return text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;");
     }
 
     @Override
