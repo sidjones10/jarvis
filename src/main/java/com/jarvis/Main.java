@@ -19,6 +19,7 @@ public class Main {
         engine.registerCommand(new WeatherCommand());
         engine.registerCommand(new QuoteCommand());
         engine.registerCommand(new SearchCommand());
+        engine.registerCommand(new DraftCommand());
 
         ReminderCommand reminderCommand = new ReminderCommand();
         engine.registerCommand(reminderCommand);
