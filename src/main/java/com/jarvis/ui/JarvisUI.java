@@ -58,11 +58,15 @@ public class JarvisUI extends JFrame implements ResponseListener {
     private JPanel profilePanel;
     private JPanel bottomBar;
 
-    // Home page compose area
+    // Home page components
+    private JTextField homeNameField;
     private JTextArea homeComposeArea;
+    private JLabel homeStatusLabel;
 
-    // Profile page compose area
+    // Profile page components
+    private JTextField profileNameField;
     private JTextArea profileComposeArea;
+    private JLabel profileStatusLabel;
 
     // Nav buttons (to update active state)
     private JButton navHome;
@@ -246,10 +250,28 @@ public class JarvisUI extends JFrame implements ResponseListener {
         welcomePanel.add(subtitleLabel);
         page.add(welcomePanel, BorderLayout.NORTH);
 
-        // Compose area
-        JPanel composePanel = new JPanel(new BorderLayout(0, 12));
-        composePanel.setBackground(BG_DARK);
-        composePanel.setBorder(new EmptyBorder(10, 40, 30, 40));
+        // Form area
+        JPanel formPanel = new JPanel();
+        formPanel.setLayout(new BoxLayout(formPanel, BoxLayout.Y_AXIS));
+        formPanel.setBackground(BG_DARK);
+        formPanel.setBorder(new EmptyBorder(10, 40, 30, 40));
+
+        // Name field
+        JLabel nameLabel = new JLabel("Draft Name:");
+        nameLabel.setFont(new Font("Monospaced", Font.BOLD, 13));
+        nameLabel.setForeground(TEXT_PRIMARY);
+        nameLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
+
+        homeNameField = createStyledTextField();
+        homeNameField.setMaximumSize(new Dimension(Integer.MAX_VALUE, 40));
+        homeNameField.setAlignmentX(Component.LEFT_ALIGNMENT);
+
+        // Content area
+        JLabel contentLabel = new JLabel("Content:");
+        contentLabel.setFont(new Font("Monospaced", Font.BOLD, 13));
+        contentLabel.setForeground(TEXT_PRIMARY);
+        contentLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
+        contentLabel.setBorder(new EmptyBorder(12, 0, 0, 0));
 
         homeComposeArea = new JTextArea();
         homeComposeArea.setFont(new Font("Monospaced", Font.PLAIN, 14));
@@ -263,20 +285,36 @@ public class JarvisUI extends JFrame implements ResponseListener {
         JScrollPane composeScroll = new JScrollPane(homeComposeArea);
         composeScroll.setBorder(BorderFactory.createLineBorder(BORDER_COLOR, 1));
         composeScroll.getViewport().setBackground(BG_INPUT);
+        composeScroll.setAlignmentX(Component.LEFT_ALIGNMENT);
         styleScrollBar(composeScroll);
+
+        // Status label + save button
+        homeStatusLabel = new JLabel(" ");
+        homeStatusLabel.setFont(new Font("SansSerif", Font.BOLD, 13));
+        homeStatusLabel.setForeground(new Color(200, 60, 60));
+        homeStatusLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
 
         JButton saveDraftBtn = createStyledButton("SAVE DRAFT", ACCENT_GREEN, 140);
         saveDraftBtn.setPreferredSize(new Dimension(140, 42));
-        saveDraftBtn.addActionListener(e -> saveDraftFrom(homeComposeArea));
+        saveDraftBtn.addActionListener(e -> saveDraftInline(homeNameField, homeComposeArea, homeStatusLabel));
 
         JPanel btnRow = new JPanel(new FlowLayout(FlowLayout.RIGHT, 0, 0));
         btnRow.setOpaque(false);
+        btnRow.setAlignmentX(Component.LEFT_ALIGNMENT);
+        btnRow.setMaximumSize(new Dimension(Integer.MAX_VALUE, 50));
         btnRow.add(saveDraftBtn);
 
-        composePanel.add(composeScroll, BorderLayout.CENTER);
-        composePanel.add(btnRow, BorderLayout.SOUTH);
+        formPanel.add(nameLabel);
+        formPanel.add(Box.createRigidArea(new Dimension(0, 6)));
+        formPanel.add(homeNameField);
+        formPanel.add(contentLabel);
+        formPanel.add(Box.createRigidArea(new Dimension(0, 6)));
+        formPanel.add(composeScroll);
+        formPanel.add(Box.createRigidArea(new Dimension(0, 8)));
+        formPanel.add(homeStatusLabel);
+        formPanel.add(btnRow);
 
-        page.add(composePanel, BorderLayout.CENTER);
+        page.add(formPanel, BorderLayout.CENTER);
         return page;
     }
 
@@ -512,6 +550,22 @@ public class JarvisUI extends JFrame implements ResponseListener {
         composeLabel.setForeground(TEXT_PRIMARY);
         composeLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
 
+        JLabel nameLabel = new JLabel("Draft Name:");
+        nameLabel.setFont(new Font("Monospaced", Font.BOLD, 13));
+        nameLabel.setForeground(TEXT_PRIMARY);
+        nameLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
+        nameLabel.setBorder(new EmptyBorder(8, 0, 0, 0));
+
+        profileNameField = createStyledTextField();
+        profileNameField.setMaximumSize(new Dimension(Integer.MAX_VALUE, 40));
+        profileNameField.setAlignmentX(Component.LEFT_ALIGNMENT);
+
+        JLabel contentLabel = new JLabel("Content:");
+        contentLabel.setFont(new Font("Monospaced", Font.BOLD, 13));
+        contentLabel.setForeground(TEXT_PRIMARY);
+        contentLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
+        contentLabel.setBorder(new EmptyBorder(8, 0, 0, 0));
+
         profileComposeArea = new JTextArea(4, 40);
         profileComposeArea.setFont(new Font("Monospaced", Font.PLAIN, 14));
         profileComposeArea.setBackground(BG_INPUT);
@@ -528,9 +582,14 @@ public class JarvisUI extends JFrame implements ResponseListener {
         composeScroll.setAlignmentX(Component.LEFT_ALIGNMENT);
         styleScrollBar(composeScroll);
 
+        profileStatusLabel = new JLabel(" ");
+        profileStatusLabel.setFont(new Font("SansSerif", Font.BOLD, 13));
+        profileStatusLabel.setForeground(new Color(200, 60, 60));
+        profileStatusLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
+
         JButton saveBtn = createStyledButton("SAVE DRAFT", ACCENT_GREEN, 140);
         saveBtn.setAlignmentX(Component.LEFT_ALIGNMENT);
-        saveBtn.addActionListener(e -> saveDraftFrom(profileComposeArea));
+        saveBtn.addActionListener(e -> saveDraftInline(profileNameField, profileComposeArea, profileStatusLabel));
 
         JPanel saveBtnRow = new JPanel(new FlowLayout(FlowLayout.LEFT, 0, 0));
         saveBtnRow.setOpaque(false);
@@ -545,9 +604,14 @@ public class JarvisUI extends JFrame implements ResponseListener {
         myDraftsLabel.setBorder(new EmptyBorder(20, 0, 6, 0));
 
         centerContent.add(composeLabel);
-        centerContent.add(Box.createRigidArea(new Dimension(0, 8)));
+        centerContent.add(nameLabel);
+        centerContent.add(Box.createRigidArea(new Dimension(0, 6)));
+        centerContent.add(profileNameField);
+        centerContent.add(contentLabel);
+        centerContent.add(Box.createRigidArea(new Dimension(0, 6)));
         centerContent.add(composeScroll);
-        centerContent.add(Box.createRigidArea(new Dimension(0, 10)));
+        centerContent.add(Box.createRigidArea(new Dimension(0, 8)));
+        centerContent.add(profileStatusLabel);
         centerContent.add(saveBtnRow);
         centerContent.add(myDraftsLabel);
         // Draft names will be appended in refreshProfileDraftList()
@@ -573,8 +637,10 @@ public class JarvisUI extends JFrame implements ResponseListener {
         if (!(view instanceof JPanel)) return;
         JPanel centerContent = (JPanel) view;
 
-        // Remove old draft name labels (everything after index 6: composeLabel, spacer, composeScroll, spacer, saveBtnRow, myDraftsLabel)
-        while (centerContent.getComponentCount() > 6) {
+        // Remove old draft name labels (everything after the fixed components)
+        // Fixed: composeLabel, nameLabel, spacer, profileNameField, contentLabel, spacer,
+        //        composeScroll, spacer, profileStatusLabel, saveBtnRow, myDraftsLabel = 11
+        while (centerContent.getComponentCount() > 11) {
             centerContent.remove(centerContent.getComponentCount() - 1);
         }
 
@@ -606,41 +672,40 @@ public class JarvisUI extends JFrame implements ResponseListener {
     //  Draft saving — shared by Home & Profile
     // =========================================================================
 
-    private void saveDraftFrom(JTextArea composeArea) {
+    private void saveDraftInline(JTextField nameField, JTextArea composeArea, JLabel statusLabel) {
+        String name = nameField.getText().trim();
         String text = composeArea.getText().trim();
+
+        if (name.isEmpty()) {
+            statusLabel.setForeground(new Color(200, 60, 60));
+            statusLabel.setText("Please enter a draft name.");
+            nameField.requestFocusInWindow();
+            return;
+        }
+
         if (text.isEmpty()) {
-            JOptionPane.showMessageDialog(this,
-                    "Please type something before saving.",
-                    "Empty Draft", JOptionPane.WARNING_MESSAGE);
+            statusLabel.setForeground(new Color(200, 60, 60));
+            statusLabel.setText("Please enter some content.");
+            composeArea.requestFocusInWindow();
             return;
         }
 
         if (draftCommand == null) {
-            JOptionPane.showMessageDialog(this,
-                    "Draft system is not available.",
-                    "Error", JOptionPane.ERROR_MESSAGE);
+            statusLabel.setForeground(new Color(200, 60, 60));
+            statusLabel.setText("Draft system is not available.");
             return;
         }
 
-        String name = JOptionPane.showInputDialog(
-                this,
-                "Enter a name for this draft:",
-                "Save Draft",
-                JOptionPane.PLAIN_MESSAGE
-        );
-
-        if (name == null || name.trim().isEmpty()) {
-            return; // User cancelled
-        }
-
-        boolean saved = draftCommand.saveDraftFile(name.trim(), text);
+        boolean saved = draftCommand.saveDraftFile(name, text);
         if (saved) {
+            nameField.setText("");
             composeArea.setText("");
+            statusLabel.setForeground(ACCENT_GREEN);
+            statusLabel.setText("Draft \"" + name + "\" saved!");
             showView(DISCOVER_VIEW);
         } else {
-            JOptionPane.showMessageDialog(this,
-                    "Error saving draft. Please try again.",
-                    "Save Failed", JOptionPane.ERROR_MESSAGE);
+            statusLabel.setForeground(new Color(200, 60, 60));
+            statusLabel.setText("Error saving draft. Check file permissions.");
         }
     }
 
@@ -761,6 +826,19 @@ public class JarvisUI extends JFrame implements ResponseListener {
         button.setContentAreaFilled(false);
         button.setCursor(new Cursor(Cursor.HAND_CURSOR));
         return button;
+    }
+
+    private JTextField createStyledTextField() {
+        JTextField field = new JTextField();
+        field.setFont(new Font("Monospaced", Font.PLAIN, 14));
+        field.setBackground(BG_INPUT);
+        field.setForeground(TEXT_PRIMARY);
+        field.setCaretColor(ACCENT_BLUE);
+        field.setBorder(BorderFactory.createCompoundBorder(
+            BorderFactory.createLineBorder(BORDER_COLOR, 1),
+            new EmptyBorder(8, 12, 8, 12)
+        ));
+        return field;
     }
 
     private void styleScrollBar(JScrollPane scrollPane) {
