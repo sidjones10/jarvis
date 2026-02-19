@@ -37,7 +37,7 @@ public class JarvisUI extends JFrame implements ResponseListener {
     private static final String PROFILE_VIEW = "profile";
 
     private final JarvisEngine engine;
-    private DraftCommand draftCommand;
+    private final DraftCommand draftCommand;
 
     // Chat components
     private JTextPane chatPane;
@@ -74,14 +74,11 @@ public class JarvisUI extends JFrame implements ResponseListener {
     private JButton navDiscover;
     private JButton navProfile;
 
-    public JarvisUI(JarvisEngine engine) {
+    public JarvisUI(JarvisEngine engine, DraftCommand draftCommand) {
         this.engine = engine;
+        this.draftCommand = draftCommand;
         initUI();
         startPulseAnimation();
-    }
-
-    public void setDraftCommand(DraftCommand draftCommand) {
-        this.draftCommand = draftCommand;
     }
 
     private void initUI() {
@@ -489,14 +486,25 @@ public class JarvisUI extends JFrame implements ResponseListener {
 
         JButton viewBtn = createStyledButton("VIEW", ACCENT_BLUE, 65);
         viewBtn.addActionListener(e -> {
-            showView(CHAT_VIEW);
-            appendJarvisMessage("Draft \"" + name + "\":\n\n" + (content != null ? content : "(empty)"));
+            try {
+                showView(CHAT_VIEW);
+                // Re-read content fresh in case it changed since card was created
+                String freshContent = draftCommand.readDraftContent(name);
+                appendJarvisMessage("Draft \"" + name + "\":\n\n" + (freshContent != null ? freshContent : "(empty)"));
+            } catch (Exception ex) {
+                showView(CHAT_VIEW);
+                appendJarvisMessage("Error viewing draft \"" + name + "\": " + ex.getMessage());
+            }
         });
 
         JButton deleteBtn = createStyledButton("DELETE", new Color(200, 60, 60), 75);
         deleteBtn.addActionListener(e -> {
-            draftCommand.deleteDraftFile(name);
-            refreshDiscoverPanel();
+            try {
+                draftCommand.deleteDraftFile(name);
+                refreshDiscoverPanel();
+            } catch (Exception ex) {
+                refreshDiscoverPanel();
+            }
         });
 
         buttons.add(viewBtn);
@@ -690,22 +698,21 @@ public class JarvisUI extends JFrame implements ResponseListener {
             return;
         }
 
-        if (draftCommand == null) {
+        try {
+            boolean saved = draftCommand.saveDraftFile(name, text);
+            if (saved) {
+                nameField.setText("");
+                composeArea.setText("");
+                statusLabel.setForeground(ACCENT_GREEN);
+                statusLabel.setText("Draft \"" + name + "\" saved!");
+                showView(DISCOVER_VIEW);
+            } else {
+                statusLabel.setForeground(new Color(200, 60, 60));
+                statusLabel.setText("Error saving draft. Check file permissions.");
+            }
+        } catch (Exception e) {
             statusLabel.setForeground(new Color(200, 60, 60));
-            statusLabel.setText("Draft system is not available.");
-            return;
-        }
-
-        boolean saved = draftCommand.saveDraftFile(name, text);
-        if (saved) {
-            nameField.setText("");
-            composeArea.setText("");
-            statusLabel.setForeground(ACCENT_GREEN);
-            statusLabel.setText("Draft \"" + name + "\" saved!");
-            showView(DISCOVER_VIEW);
-        } else {
-            statusLabel.setForeground(new Color(200, 60, 60));
-            statusLabel.setText("Error saving draft. Check file permissions.");
+            statusLabel.setText("Error: " + e.getMessage());
         }
     }
 
@@ -748,6 +755,7 @@ public class JarvisUI extends JFrame implements ResponseListener {
     }
 
     private void appendJarvisMessage(String text) {
+        if (chatPane == null || doc == null) return;
         String timestamp = LocalTime.now().format(DateTimeFormatter.ofPattern("HH:mm"));
         appendStyledText("\n JARVIS [" + timestamp + "]  ", createStyle(JARVIS_COLOR, true));
         appendStyledText(text + "\n", createStyle(TEXT_PRIMARY, false));
@@ -755,6 +763,7 @@ public class JarvisUI extends JFrame implements ResponseListener {
     }
 
     private void appendStyledText(String text, SimpleAttributeSet style) {
+        if (doc == null) return;
         try { doc.insertString(doc.getLength(), text, style); }
         catch (BadLocationException ignored) {}
     }

@@ -31,9 +31,8 @@ public class Main {
                 UIManager.setLookAndFeel(UIManager.getCrossPlatformLookAndFeelClassName());
             } catch (Exception ignored) {}
 
-            JarvisUI ui = new JarvisUI(engine);
+            JarvisUI ui = new JarvisUI(engine, draftCommand);
             reminderCommand.setResponseListener(ui);
-            ui.setDraftCommand(draftCommand);
             ui.setVisible(true);
         });
     }
